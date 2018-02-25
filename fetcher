@@ -1,0 +1,45 @@
+#!/bin/bash
+
+project="$1"
+REPO="resume-library/$project"
+release="$2"                       # tag name or the word "latest"
+GITHUB="https://api.github.com"
+
+Parameter_judge() {
+    correct_num="$1"
+    real_num="$2"
+    if [ "$correct_num" != "$real_num" ];then
+        Usage
+    fi
+}
+
+Usage() {
+    echo "Usage: $0 [project] [TAG/latest] [FILE_NAME]"
+    exit 1
+}
+
+Parameter_judge 3 $#
+
+if [ "$release" = "latest" ]; then
+    # Github should return the latest release first.
+    release=`curl -s $GITHUB/repos/$REPO/releases/latest | jq -r .tag_name`
+fi
+
+echo -e "tag:\t\t$release"
+FILE="$3-$release.zip"      # the name of your release asset file, e.g. build.tar.gz
+echo -e "file:\t\t$FILE"
+
+parser=". | map(select(.tag_name == \"$release\"))[0].assets | map(select(.name == \"$FILE\"))[0].id"
+asset_id=`curl -s $GITHUB/repos/$REPO/releases | jq "$parser"`
+
+if [ "$asset_id" = "null" ]; then
+    >&2 echo "ERROR: release not found $release"
+    exit 1
+fi
+
+file_url=`curl  -s $GITHUB/repos/$REPO/releases/assets/$asset_id | \
+                jq -r ".browser_download_url"  `
+
+# download package
+curl "$file_url" -i -o $FILE
+
